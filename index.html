@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="ru" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HealthTracker — Трекер Здоровья</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Font Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#ecfdf5',
+                            100: '#d1fae5',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Smooth transitions */
+        .card-hover {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .card-hover:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.08);
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="h-full text-slate-800 font-sans flex flex-col min-h-screen">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Header Navigation -->
+    <header class="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <!-- Logo -->
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
+                        <i class="fa-solid font-bold fa-heart-pulse text-xl"></i>
+                    </div>
+                    <div>
+                        <span class="font-bold text-lg tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">HealthTracker</span>
+                        <span class="block text-[10px] text-slate-400 font-medium -mt-1">Дневник Здоровья</span>
+                    </div>
+                </div>
+
+                <!-- Navigation Links -->
+                <nav class="hidden md:flex items-center gap-1 bg-slate-100/80 p-1.5 rounded-xl text-sm font-medium">
+                    <button onclick="scrollToSection('dashboard')" class="px-4 py-1.5 rounded-lg text-emerald-700 bg-white shadow-sm transition-all font-semibold">Обзор</button>
+                    <button onclick="scrollToSection('water-section')" class="px-4 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white/50 transition-all">Вода</button>
+                    <button onclick="scrollToSection('food-section')" class="px-4 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white/50 transition-all">Питание</button>
+                    <button onclick="scrollToSection('activity-section')" class="px-4 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white/50 transition-all">Активность</button>
+                    <button onclick="scrollToSection('sleep-section')" class="px-4 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white/50 transition-all">Сон</button>
+                </nav>
+
+                <!-- Date & Reset -->
+                <div class="flex items-center gap-3">
+                    <div class="text-right hidden sm:block">
+                        <span id="current-date" class="text-xs font-semibold text-slate-500"></span>
+                        <span class="block text-xs text-emerald-600 font-medium">Сегодня</span>
+                    </div>
+                    <button onclick="resetDayData()" title="Сбросить данные за день" class="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors">
+                        <i class="fa-solid fa-rotate-right text-sm"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+
+        <!-- AI Advice Widget -->
+        <div class="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 rounded-2xl p-6 text-white shadow-xl shadow-emerald-500/10 relative overflow-hidden">
+            <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+            <div class="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div class="flex items-start gap-4">
+                    <div class="p-3 bg-white/20 backdrop-blur-md rounded-xl text-yellow-300">
+                        <i class="fa-solid fa-lightbulb text-2xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-xs uppercase font-bold tracking-wider text-emerald-200">Совет дня по здоровью</span>
+                        <h2 id="ai-tip-title" class="text-lg font-bold">Правильный гидратационный баланс</h2>
+                        <p id="ai-tip-desc" class="text-sm text-emerald-50 mt-1 max-w-2xl">Выпивайте стакан теплой воды сразу после пробуждения. Это помогает активировать метаболизм и восполнить баланс жидкости после сна.</p>
+                    </div>
+                </div>
+                <button onclick="nextTip()" class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-sm rounded-xl text-xs font-semibold transition-all whitespace-nowrap">
+                    <i class="fa-solid fa-arrows-rotate mr-1.5"></i> Другой совет
+                </button>
+            </div>
+        </div>
+
+        <!-- Dashboard Metrics (Overview) -->
+        <section id="dashboard" class="space-y-4">
+            <h3 class="text-lg font-bold text-slate-800">Обзор за сегодня</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                
+                <!-- Water Card -->
+                <div class="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm card-hover flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-semibold text-slate-500">Вода</span>
+                        <div class="w-9 h-9 rounded-xl bg-sky-50 text-sky-500 flex items-center justify-center">
+                            <i class="fa-solid fa-droplet text-lg"></i>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <div class="flex items-baseline gap-1">
+                            <span id="water-current" class="text-3xl font-extrabold text-slate-800">0</span>
+                            <span class="text-sm text-slate-400 font-medium">/ <span id="water-goal-text">2500</span> мл</span>
+                        </div>
+                        <div class="w-full bg-slate-100 h-2.5 rounded-full mt-3 overflow-hidden">
+                            <div id="water-bar" class="bg-sky-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Calories Card -->
+                <div class="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm card-hover flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-semibold text-slate-500">Калории</span>
+                        <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center">
+                            <i class="fa-solid fa-utensils text-lg"></i>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <div class="flex items-baseline gap-1">
+                            <span id="calories-current" class="text-3xl font-extrabold text-slate-800">0</span>
+                            <span class="text-sm text-slate-400 font-medium">/ <span id="calories-goal-text">2200</span> ккал</span>
+                        </div>
+                        <div class="w-full bg-slate-100 h-2.5 rounded-full mt-3 overflow-hidden">
+                            <div id="calories-bar" class="bg-amber-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Steps Card -->
+                <div class="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm card-hover flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-semibold text-slate-500">Активность</span>
+                        <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center">
+                            <i class="fa-solid fa-person-walking text-lg"></i>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <div class="flex items-baseline gap-1">
+                            <span id="steps-current" class="text-3xl font-extrabold text-slate-800">0</span>
+                            <span class="text-sm text-slate-400 font-medium">/ <span id="steps-goal-text">10000</span> шагов</span>
+                        </div>
+                        <div class="w-full bg-slate-100 h-2.5 rounded-full mt-3 overflow-hidden">
+                            <div id="steps-bar" class="bg-emerald-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sleep Card -->
+                <div class="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm card-hover flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-semibold text-slate-500">Сон</span>
+                        <div class="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-500 flex items-center justify-center">
+                            <i class="fa-solid fa-moon text-lg"></i>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <div class="flex items-baseline gap-1">
+                            <span id="sleep-current" class="text-3xl font-extrabold text-slate-800">0</span>
+                            <span class="text-sm text-slate-400 font-medium">/ <span id="sleep-goal-text">8</span> ч</span>
+                        </div>
+                        <div class="w-full bg-slate-100 h-2.5 rounded-full mt-3 overflow-hidden">
+                            <div id="sleep-bar" class="bg-indigo-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Interactive Logging Tools (2 Columns on Large Screens) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+            <!-- Left Column: Water & Food Tracker -->
+            <div class="space-y-8">
+                
+                <!-- Water Tracker -->
+                <section id="water-section" class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-droplet text-sky-500"></i> Трекер Воды
+                        </h4>
+                        <span class="text-xs font-semibold px-2.5 py-1 bg-sky-50 text-sky-600 rounded-full">Цель: 2.5л</span>
+                    </div>
+                    
+                    <p class="text-xs text-slate-500 mb-4">Добавляйте выпитую воду в течение дня один кликом:</p>
+                    
+                    <div class="grid grid-cols-3 gap-3">
+                        <button onclick="addWater(250)" class="flex flex-col items-center justify-center p-3 bg-sky-50 hover:bg-sky-100 border border-sky-100 rounded-xl transition-all group">
+                            <i class="fa-solid fa-glass-water text-sky-500 text-lg mb-1 group-hover:scale-110 transition-transform"></i>
+                            <span class="text-xs font-bold text-sky-700">+250 мл</span>
+                            <span class="text-[10px] text-sky-500">Стакан</span>
+                        </button>
+                        <button onclick="addWater(500)" class="flex flex-col items-center justify-center p-3 bg-sky-50 hover:bg-sky-100 border border-sky-100 rounded-xl transition-all group">
+                            <i class="fa-solid fa-bottle-water text-sky-500 text-lg mb-1 group-hover:scale-110 transition-transform"></i>
+                            <span class="text-xs font-bold text-sky-700">+500 мл</span>
+                            <span class="text-[10px] text-sky-500">Бутылка</span>
+                        </button>
+                        <button onclick="promptCustomWater()" class="flex flex-col items-center justify-center p-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all group">
+                            <i class="fa-solid fa-plus text-slate-400 text-lg mb-1 group-hover:scale-110 transition-transform"></i>
+                            <span class="text-xs font-bold text-slate-700">Свое значение</span>
+                            <span class="text-[10px] text-slate-400">Ввести мл</span>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Food Tracker -->
+                <section id="food-section" class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-utensils text-amber-500"></i> Дневник Питания
+                        </h4>
+                        <span id="food-total-badge" class="text-xs font-semibold px-2.5 py-1 bg-amber-50 text-amber-600 rounded-full">0 ккал</span>
+                    </div>
+
+                    <form id="food-form" onsubmit="addFood(event)" class="flex flex-col sm:flex-row gap-3 mb-5">
+                        <input type="text" id="food-name" placeholder="Название блюда (напр. Овсянка)" required 
+                               class="flex-grow px-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500">
+                        <input type="number" id="food-calories" placeholder="Ккал" required min="1" max="3000"
+                               class="w-full sm:w-28 px-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500">
+                        <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm rounded-xl transition-colors shrink-0">
+                            Добавить
+                        </button>
+                    </form>
+
+                    <!-- Food Log List -->
+                    <div class="space-y-2 max-h-48 overflow-y-auto pr-1" id="food-list">
+                        <p class="text-xs text-slate-400 text-center py-4">Сегодня записей о приеме пищи еще нет</p>
+                    </div>
+                </section>
+
+            </div>
+
+            <!-- Right Column: Activity & Sleep Tracker -->
+            <div class="space-y-8">
+                
+                <!-- Activity Tracker -->
+                <section id="activity-section" class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-person-running text-emerald-500"></i> Активность и Шаги
+                        </h4>
+                        <span id="activity-total-badge" class="text-xs font-semibold px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-full">0 шагов</span>
+                    </div>
+
+                    <form id="activity-form" onsubmit="addActivity(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                        <select id="activity-type" class="px-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500">
+                            <option value="Шаги">Ходьба (Шаги)</option>
+                            <option value="Бег">Бег</option>
+                            <option value="Велосипед">Велосипед</option>
+                            <option value="Плавание">Плавание</option>
+                            <option value="Фитнес">Тренировка</option>
+                        </select>
+                        <input type="number" id="activity-val" placeholder="Шаги / Минуты" required min="1"
+                               class="px-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500">
+                        <button type="submit" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm rounded-xl transition-colors">
+                            Записать
+                        </button>
+                    </form>
+
+                    <!-- Activity Log List -->
+                    <div class="space-y-2 max-h-48 overflow-y-auto pr-1" id="activity-list">
+                        <p class="text-xs text-slate-400 text-center py-4">Нет записей активности за сегодня</p>
+                    </div>
+                </section>
+
+                <!-- Sleep Tracker -->
+                <section id="sleep-section" class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-moon text-indigo-500"></i> Трекер Сна
+                        </h4>
+                        <span class="text-xs font-semibold px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full">Норма: 8ч</span>
+                    </div>
+
+                    <form id="sleep-form" onsubmit="saveSleep(event)" class="space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-500 mb-1">Продолжительность (часов)</label>
+                                <input type="number" step="0.5" id="sleep-hours" placeholder="Например, 7.5" required min="0" max="24"
+                                       class="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-500 mb-1">Качество сна</label>
+                                <select id="sleep-quality" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+                                    <option value="5">Отличное (⭐⭐⭐⭐⭐)</option>
+                                    <option value="4">Хорошее (⭐⭐⭐⭐)</option>
+                                    <option value="3">Нормальное (⭐⭐⭐)</option>
+                                    <option value="2">Плохое (⭐⭐)</option>
+                                    <option value="1">Ужасное (⭐)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition-colors">
+                            Сохранить показатели сна
+                        </button>
+                    </form>
+                </section>
+
+            </div>
+
+        </div>
+
+        <!-- Weekly Progress Charts Section -->
+        <section class="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm space-y-6">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800">Аналитика за неделю</h3>
+                    <p class="text-xs text-slate-400">Сравнение вашей активности и водного баланса за последние 7 дней</p>
+                </div>
+                <div class="flex items-center gap-2 text-xs font-medium bg-slate-100 p-1 rounded-lg">
+                    <button onclick="switchChart('weekly')" id="btn-chart-week" class="px-3 py-1 rounded-md bg-white shadow-xs text-slate-800 font-semibold">Неделя</button>
+                    <button onclick="switchChart('goals')" id="btn-chart-goals" class="px-3 py-1 rounded-md text-slate-500 hover:text-slate-800">Выполнение целей</button>
+                </div>
+            </div>
+
+            <!-- Canvas Container -->
+            <div class="relative w-full h-72">
+                <canvas id="analyticsChart"></canvas>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-6 mt-12">
+        <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400">
+            <p>© 2026 HealthTracker. Все ваши данные хранятся локально в браузере.</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // --- State Management ---
+        const DEFAULT_STATE = {
+            water: 0,
+            waterGoal: 2500,
+            caloriesGoal: 2200,
+            stepsGoal: 10000,
+            sleepGoal: 8,
+            foodLog: [],
+            activityLog: [],
+            sleep: { hours: 0, quality: 5 },
+            weeklyData: {
+                labels: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'],
+                water: [1800, 2100, 2500, 1900, 2300, 2400, 0],
+                steps: [8500, 10200, 9400, 7800, 11000, 12500, 0]
+            }
+        };
+
+        let state = JSON.parse(localStorage.getItem('health_tracker_state')) || DEFAULT_STATE;
+
+        function saveState() {
+            localStorage.setItem('health_tracker_state', JSON.stringify(state));
+            updateUI();
+        }
+
+        // --- Health Tips Data ---
+        const healthTips = [
+            {
+                title: "Правильный гидратационный баланс",
+                desc: "Выпивайте стакан теплой воды сразу после пробуждения. Это помогает активировать метаболизм и восполнить баланс жидкости после сна."
+            },
+            {
+                title: "Качественный сон и циркадные ритмы",
+                desc: "Старайтесь ложиться и вставать в одно и то же время. Отложите гаджеты за 1 час до сна для естественного выделения мелатонина."
+            },
+            {
+                title: "Разминка в течение дня",
+                desc: "Если у вас сидячая работа, делайте 5-минутный перерыв каждый час. Простая ходьба или легкая разминка снижают нагрузку на позвоночник."
+            },
+            {
+                title: "Сбалансированное питание",
+                desc: "Старайтесь наполнить половину вашей тарелки свежими овощами и зеленью при каждом основном приеме пищи."
+            }
+        ];
+        let tipIndex = 0;
+
+        function nextTip() {
+            tipIndex = (tipIndex + 1) % healthTips.length;
+            document.getElementById('ai-tip-title').innerText = healthTips[tipIndex].title;
+            document.getElementById('ai-tip-desc').innerText = healthTips[tipIndex].desc;
+        }
+
+        // --- UI Updates ---
+        function updateUI() {
+            // Update Water
+            const waterCurrent = state.water;
+            document.getElementById('water-current').innerText = waterCurrent;
+            document.getElementById('water-goal-text').innerText = state.waterGoal;
+            const waterPct = Math.min(100, Math.round((waterCurrent / state.waterGoal) * 100));
+            document.getElementById('water-bar').style.width = `${waterPct}%`;
+
+            // Update Calories
+            const caloriesCurrent = state.foodLog.reduce((acc, item) => acc + item.calories, 0);
+            document.getElementById('calories-current').innerText = caloriesCurrent;
+            document.getElementById('calories-goal-text').innerText = state.caloriesGoal;
+            const calPct = Math.min(100, Math.round((caloriesCurrent / state.caloriesGoal) * 100));
+            document.getElementById('calories-bar').style.width = `${calPct}%`;
+            document.getElementById('food-total-badge').innerText = `${caloriesCurrent} ккал`;
+
+            // Update Steps/Activity
+            const stepsCurrent = state.activityLog.reduce((acc, item) => acc + (item.steps || 0), 0);
+            document.getElementById('steps-current').innerText = stepsCurrent.toLocaleString();
+            document.getElementById('steps-goal-text').innerText = state.stepsGoal.toLocaleString();
+            const stepsPct = Math.min(100, Math.round((stepsCurrent / state.stepsGoal) * 100));
+            document.getElementById('steps-bar').style.width = `${stepsPct}%`;
+            document.getElementById('activity-total-badge').innerText = `${stepsCurrent.toLocaleString()} шагов`;
+
+            // Update Sleep
+            document.getElementById('sleep-current').innerText = state.sleep.hours;
+            document.getElementById('sleep-goal-text').innerText = state.sleepGoal;
+            const sleepPct = Math.min(100, Math.round((state.sleep.hours / state.sleepGoal) * 100));
+            document.getElementById('sleep-bar').style.width = `${sleepPct}%`;
+
+            // Render Lists
+            renderFoodList();
+            renderActivityList();
+
+            // Sync Today's Data with Weekly Chart
+            state.weeklyData.water[6] = state.water;
+            state.weeklyData.steps[6] = stepsCurrent;
+            updateChart();
+        }
+
+        // --- Actions & Trackers ---
+
+        // Water
+        function addWater(amount) {
+            state.water += amount;
+            showToast(`Добавлено ${amount} мл воды 💧`, 'sky');
+            saveState();
+        }
+
+        function promptCustomWater() {
+            const val = prompt("Введите количество выпитой воды (в мл):", "300");
+            const parsed = parseInt(val);
+            if (!isNaN(parsed) && parsed > 0) {
+                addWater(parsed);
+            }
+        }
+
+        // Food
+        function addFood(e) {
+            e.preventDefault();
+            const nameInput = document.getElementById('food-name');
+            const calInput = document.getElementById('food-calories');
+            
+            const name = nameInput.value.trim();
+            const calories = parseInt(calInput.value);
+
+            if (name && calories > 0) {
+                state.foodLog.push({ id: Date.now(), name, calories });
+                nameInput.value = '';
+                calInput.value = '';
+                showToast(`Добавлено: ${name} (${calories} ккал) 🥗`, 'amber');
+                saveState();
+            }
+        }
+
+        function removeFood(id) {
+            state.foodLog = state.foodLog.filter(item => item.id !== id);
+            saveState();
+            showToast('Запись о приеме пищи удалена', 'slate');
+        }
+
+        function renderFoodList() {
+            const container = document.getElementById('food-list');
+            if (state.foodLog.length === 0) {
+                container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Сегодня записей о приеме пищи еще нет</p>';
+                return;
+            }
+            container.innerHTML = state.foodLog.map(item => `
+                <div class="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-sm">
+                    <span class="font-medium text-slate-700">${escapeHtml(item.name)}</span>
+                    <div class="flex items-center gap-3">
+                        <span class="font-semibold text-amber-600">${item.calories} ккал</span>
+                        <button onclick="removeFood(${item.id})" class="text-slate-400 hover:text-rose-500 transition-colors">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Activity
+        function addActivity(e) {
+            e.preventDefault();
+            const type = document.getElementById('activity-type').value;
+            const val = parseInt(document.getElementById('activity-val').value);
+
+            if (val > 0) {
+                let steps = 0;
+                let desc = '';
+                
+                if (type === 'Шаги') {
+                    steps = val;
+                    desc = `${val.toLocaleString()} шагов`;
+                } else {
+                    // Approximate steps for active sports
+                    steps = val * 120;
+                    desc = `${val} мин (${steps} экв. шагов)`;
+                }
+
+                state.activityLog.push({ id: Date.now(), type, steps, desc });
+                document.getElementById('activity-val').value = '';
+                showToast(`Записана активность: ${type} 🏃‍♂️`, 'emerald');
+                saveState();
+            }
+        }
+
+        function removeActivity(id) {
+            state.activityLog = state.activityLog.filter(item => item.id !== id);
+            saveState();
+            showToast('Запись активности удалена', 'slate');
+        }
+
+        function renderActivityList() {
+            const container = document.getElementById('activity-list');
+            if (state.activityLog.length === 0) {
+                container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Нет записей активности за сегодня</p>';
+                return;
+            }
+            container.innerHTML = state.activityLog.map(item => `
+                <div class="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-sm">
+                    <div class="flex items-center gap-2">
+                        <span class="font-semibold text-slate-700">${item.type}</span>
+                        <span class="text-xs text-slate-400">(${item.desc})</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button onclick="removeActivity(${item.id})" class="text-slate-400 hover:text-rose-500 transition-colors">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Sleep
+        function saveSleep(e) {
+            e.preventDefault();
+            const hours = parseFloat(document.getElementById('sleep-hours').value);
+            const quality = parseInt(document.getElementById('sleep-quality').value);
+
+            if (!isNaN(hours) && hours >= 0) {
+                state.sleep = { hours, quality };
+                showToast(`Сон сохранен: ${hours} ч 🌙`, 'indigo');
+                saveState();
+            }
+        }
+
+        // Reset Day Data
+        function resetDayData() {
+            if (confirm("Вы уверены, что хотите сбросить текущие показатели за день?")) {
+                state.water = 0;
+                state.foodLog = [];
+                state.activityLog = [];
+                state.sleep = { hours: 0, quality: 5 };
+                saveState();
+                showToast('Данные за день сброшены', 'slate');
+            }
+        }
+
+        // --- Chart Logic ---
+        let analyticsChart;
+        let chartMode = 'weekly';
+
+        function initChart() {
+            const ctx = document.getElementById('analyticsChart').getContext('2d');
+            analyticsChart = new Chart(ctx, {
+                type: 'bar',
+                data: getWeeklyChartData(),
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                font: { family: 'Inter', size: 12 },
+                                usePointStyle: true,
+                                boxWidth: 8
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#f1f5f9' },
+                            ticks: { font: { family: 'Inter', size: 11 } }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { font: { family: 'Inter', size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        function getWeeklyChartData() {
+            return {
+                labels: state.weeklyData.labels,
+                datasets: [
+                    {
+                        label: 'Вода (мл)',
+                        data: state.weeklyData.water,
+                        backgroundColor: '#38bdf8',
+                        borderRadius: 6
+                    },
+                    {
+                        label: 'Шаги',
+                        data: state.weeklyData.steps,
+                        backgroundColor: '#10b981',
+                        borderRadius: 6
+                    }
+                ]
+            };
+        }
+
+        function getGoalsChartData() {
+            const caloriesCurrent = state.foodLog.reduce((acc, item) => acc + item.calories, 0);
+            const stepsCurrent = state.activityLog.reduce((acc, item) => acc + (item.steps || 0), 0);
+
+            return {
+                labels: ['Вода (%)', 'Калории (%)', 'Шаги (%)', 'Сон (%)'],
+                datasets: [{
+                    label: 'Выполнение дневной нормы (%)',
+                    data: [
+                        Math.min(100, Math.round((state.water / state.waterGoal) * 100)),
+                        Math.min(100, Math.round((caloriesCurrent / state.caloriesGoal) * 100)),
+                        Math.min(100, Math.round((stepsCurrent / state.stepsGoal) * 100)),
+                        Math.min(100, Math.round((state.sleep.hours / state.sleepGoal) * 100))
+                    ],
+                    backgroundColor: ['#38bdf8', '#f59e0b', '#10b981', '#6366f1'],
+                    borderRadius: 8
+                }]
+            };
+        }
+
+        function updateChart() {
+            if (!analyticsChart) return;
+            analyticsChart.data = chartMode === 'weekly' ? getWeeklyChartData() : getGoalsChartData();
+            analyticsChart.update();
+        }
+
+        function switchChart(mode) {
+            chartMode = mode;
+            const btnWeek = document.getElementById('btn-chart-week');
+            const btnGoals = document.getElementById('btn-chart-goals');
+
+            if (mode === 'weekly') {
+                btnWeek.className = "px-3 py-1 rounded-md bg-white shadow-xs text-slate-800 font-semibold";
+                btnGoals.className = "px-3 py-1 rounded-md text-slate-500 hover:text-slate-800";
+            } else {
+                btnGoals.className = "px-3 py-1 rounded-md bg-white shadow-xs text-slate-800 font-semibold";
+                btnWeek.className = "px-3 py-1 rounded-md text-slate-500 hover:text-slate-800";
+            }
+            updateChart();
+        }
+
+        // --- Helper Utilities ---
+        function showToast(message, color = 'emerald') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const colorClasses = {
+                sky: 'bg-sky-600 text-white',
+                emerald: 'bg-emerald-600 text-white',
+                amber: 'bg-amber-600 text-white',
+                indigo: 'bg-indigo-600 text-white',
+                slate: 'bg-slate-800 text-white'
+            };
+
+            toast.className = `px-4 py-3 rounded-xl shadow-lg text-xs font-semibold flex items-center gap-2 pointer-events-auto transform transition-all duration-300 opacity-0 translate-y-2 ${colorClasses[color] || colorClasses.slate}`;
+            toast.innerHTML = message;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-0', 'translate-y-2');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function scrollToSection(id) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/[&<>"']/g, function(m) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                }[m];
+            });
+        }
+
+        // --- Initialize App ---
+        window.onload = function() {
+            // Set current date
+            const now = new Date();
+            const options = { weekday: 'long', day: 'numeric', month: 'long' };
+            document.getElementById('current-date').innerText = now.toLocaleDateString('ru-RU', options);
+
+            // Populate sleep fields if present
+            if (state.sleep.hours) {
+                document.getElementById('sleep-hours').value = state.sleep.hours;
+            }
+            if (state.sleep.quality) {
+                document.getElementById('sleep-quality').value = state.sleep.quality;
+            }
+
+            initChart();
+            updateUI();
+        };
+    </script>
+</body>
+</html>
